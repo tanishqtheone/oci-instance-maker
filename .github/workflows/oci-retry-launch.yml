@@ -1,0 +1,41 @@
+name: OCI A1 Capacity Retry Launch
+
+on:
+  schedule:
+    # GitHub's minimum cron granularity is 5 minutes. Scheduled runs can also
+    # be delayed by a few minutes during high load on GitHub's side - this is
+    # normal and not something we can control.
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}   # lets you manually trigger a run from the Actions tab to test immediately
+
+jobs:
+  attempt-launch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install OCI CLI
+        run: pip install oci-cli
+
+      - name: Configure OCI CLI auth
+        run: |
+          mkdir -p ~/.oci
+          cat > ~/.oci/config << EOF
+          [DEFAULT]
+          user=${{ secrets.OCI_USER_OCID }}
+          fingerprint=${{ secrets.OCI_FINGERPRINT }}
+          tenancy=${{ secrets.OCI_TENANCY_OCID }}
+          region=${{ secrets.OCI_REGION }}
+          key_file=~/.oci/oci_api_key.pem
+          EOF
+          cat > ~/.oci/oci_api_key.pem << 'EOF'
+          ${{ secrets.OCI_PRIVATE_KEY }}
+          EOF
+          chmod 600 ~/.oci/oci_api_key.pem ~/.oci/config
+
+      - name: Attempt launch (or skip if already created)
+        env:
+          COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          BOOT_VOLUME_ID: ${{ secrets.OCI_BOOT_VOLUME_ID }}
+          SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
+          AVAILABILITY_DOMAIN: ${{ secrets.OCI_AD }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: bash scripts/attempt_launch.sh
